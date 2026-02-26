@@ -69,8 +69,8 @@ your-repo/
 │       ├── log.md                   # /log slash command
 │       └── rewind.md                # /rewind slash command
 └── ai-logs/
-    ├── 2025-02-26-auth-refactor.md
-    ├── 2025-02-24-payment-webhooks.md
+    ├── 2026-02-26-auth-refactor.md
+    ├── 2026-02-24-payment-webhooks.md
     └── ...
 ```
 
