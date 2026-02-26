@@ -25,10 +25,10 @@ if ! git -C "$TARGET" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
   exit 1
 fi
 
-# --- Trap for partial-failure cleanup ---
-trap 'echo "" >&2; echo "❌ Install failed. whygit may be partially installed — check $TARGET manually." >&2' ERR
-
 echo "📦 Installing whygit into: $TARGET"
+
+# --- Trap for partial-failure cleanup (registered after validation, so it only fires during install) ---
+trap 'echo "" >&2; echo "❌ Install failed. whygit may be partially installed — check $TARGET manually." >&2' ERR
 
 # Create directories
 mkdir -p -- "$TARGET/.claude/commands"
