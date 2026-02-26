@@ -193,13 +193,13 @@ For each file in `ai-logs/` (newest first), extract and display:
 
 Format as a clean numbered list. Example:
 ```
-1. 2025-02-26 · auth-middleware-refactor
+1. 2026-02-26 · auth-middleware-refactor
    Refactored JWT auth into middleware layer. Moved token validation out of controllers.
-   → ai-logs/2025-02-26-auth-middleware-refactor.md
+   → ai-logs/2026-02-26-auth-middleware-refactor.md
 
-2. 2025-02-24 · payment-webhook-handling
+2. 2026-02-24 · payment-webhook-handling
    Added Stripe webhook endpoint with signature verification.
-   → ai-logs/2025-02-24-payment-webhook-handling.md
+   → ai-logs/2026-02-24-payment-webhook-handling.md
 ```
 
 ### Keyword argument → search and show
