@@ -49,7 +49,7 @@ In any Claude Code session:
 /log                 → write log only, no commit
 /rewind              → browse all sessions newest first
 /rewind auth         → find sessions related to "auth"
-/rewind 2025-02-26   → show all logs from that date
+/rewind 2026-02-26   → show all logs from that date
 ```
 
 That's it.
