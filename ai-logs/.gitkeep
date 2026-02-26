@@ -1,0 +1,2 @@
+# AI decision logs should always be committed — never ignore them
+# This file exists as a reminder: do not add ai-logs/ to .gitignore
