@@ -41,8 +41,8 @@ your-repo/
 │       └── rewind.md                  # /rewind slash command
 ├── ai-logs/
 │   ├── .gitkeep                       # Ensures directory is tracked
-│   ├── 2025-02-26-auth-refactor.md
-│   ├── 2025-02-24-payment-webhooks.md
+│   ├── 2026-02-26-auth-refactor.md
+│   ├── 2026-02-24-payment-webhooks.md
 │   └── ...
 └── install-whygit.sh                  # One-time setup script
 ```
@@ -171,7 +171,7 @@ git add . && git commit -m "chore: add AI decision logging"
 /log                 → write log only, no commit
 /rewind              → browse all sessions newest first
 /rewind auth         → find sessions related to "auth"
-/rewind 2025-02-26   → show all logs from that date
+/rewind 2026-02-26   → show all logs from that date
 ```
 
 ---
