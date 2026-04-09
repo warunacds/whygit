@@ -35,10 +35,16 @@ No external services. No accounts. No cloud. Just files in git.
 your-repo/
 ├── CLAUDE.md                          # Persistent Claude Code instructions
 ├── .claude/
-│   └── commands/
-│       ├── commit.md                  # /commit slash command
-│       ├── log.md                     # /log slash command
-│       └── rewind.md                  # /rewind slash command
+│   ├── commands/
+│   │   ├── commit.md                  # /commit slash command
+│   │   ├── log.md                     # /log slash command
+│   │   ├── rewind.md                  # /rewind slash command
+│   │   ├── learn.md                   # /learn slash command
+│   │   └── skills.md                  # /skills slash command
+│   └── skills/                        # Learned guardrails
+│       ├── .processed                 # Mined-log ledger
+│       ├── .conflicts/                # Unresolved contradictions
+│       └── <skill-id>.md              # One file per active skill
 ├── ai-logs/
 │   ├── .gitkeep                       # Ensures directory is tracked
 │   ├── 2026-02-26-auth-refactor.md
@@ -86,6 +92,34 @@ Modes:
 
 ---
 
+### `/learn`
+**Mine `ai-logs/` for learnable failures.** Turns past wrong turns into concrete skills at `.claude/skills/`.
+
+Modes:
+- `/learn` — mine all unprocessed logs
+- `/learn --log <path>` — re-mine a specific log, ignoring the processed ledger
+
+Flow:
+1. Read `.claude/skills/.processed` to find which logs have already been mined
+2. Read unprocessed `ai-logs/*.md` in full
+3. Attribute each log to one of: NEW (new skill), PATCH (amend existing skill), CONFLICT (contradicts existing skill)
+4. Self-audit each draft for concreteness — drafts that are too generic are dropped
+5. Propose all changes in chat and ask the user to approve (`y` / `N` / `select`)
+6. On approval, write skill files, record processed logs, and commit
+
+Every mutation to `.claude/skills/` is human-approved. `/learn` never writes silently.
+
+---
+
+### `/skills`
+**List active skills and unresolved conflicts.** Read-only.
+
+Prints a numbered list of every `*.md` file in `.claude/skills/` with id, title, created/updated dates, and source count. If `.claude/skills/.conflicts/` contains any files, prints a warning banner at the top.
+
+No arguments in v1. Use `cat .claude/skills/<id>.md` to view a specific skill in full.
+
+---
+
 ## Log File Format
 
 Filename: `ai-logs/YYYY-MM-DD-<slug>.md`
@@ -118,6 +152,42 @@ Anything left incomplete, known issues, or suggested next steps.
 
 ---
 
+## Skill File Format
+
+Filename: `.claude/skills/<id>.md`
+- `id` is kebab-case, specific to the lesson (e.g. `curl-pipe-bash-self-contained`)
+
+```markdown
+---
+id: <id>
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+sources:
+  - ai-logs/<source log filename>
+status: active
+---
+
+# <Skill title>
+
+## When to apply
+- Concrete triggers (file paths, function names, libraries, schema types)
+
+## When NOT to apply
+- Cases where the guardrail does not apply
+
+## Guardrails
+1. Specific rules tied to specific triggers
+
+## Why this exists
+Citation of the source log and a paraphrase of the original failure.
+```
+
+`.claude/skills/.processed` — plain text, one log filename per line, tracks which logs `/learn` has already mined.
+
+`.claude/skills/.conflicts/<slug>.md` — markdown files recording cases where a new log contradicts an existing skill. Must be resolved by hand.
+
+---
+
 ## Commit Message Format
 
 ```
@@ -138,6 +208,7 @@ The `CLAUDE.md` file instructs Claude Code to:
 - Never delete or modify files in `ai-logs/`
 - Proactively offer `/commit` at the end of significant work sessions
 - Check `ai-logs/` first when asked "why did we do X" or "how did we decide Y"
+- Read `.claude/skills/` using a two-pass load at the start of every session (scan triggers, then load matching bodies)
 
 ---
 
@@ -172,6 +243,8 @@ git add . && git commit -m "chore: add AI decision logging"
 /rewind              → browse all sessions newest first
 /rewind auth         → find sessions related to "auth"
 /rewind 2026-02-26   → show all logs from that date
+/learn               → mine ai-logs/ for reusable skills
+/skills              → list active skills and conflicts
 ```
 
 ---
