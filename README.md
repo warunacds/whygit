@@ -50,6 +50,8 @@ In any Claude Code session:
 /rewind              → browse all sessions newest first
 /rewind auth         → find sessions related to "auth"
 /rewind 2026-02-26   → show all logs from that date
+/learn               → mine ai-logs/ for reusable skills
+/skills              → list active skills and unresolved conflicts
 ```
 
 That's it.
@@ -62,12 +64,17 @@ whygit installs three Claude Code slash commands and a `CLAUDE.md` directive int
 
 ```
 your-repo/
-├── CLAUDE.md                        # Tells Claude to log reasoning
+├── CLAUDE.md                        # Tells Claude to log reasoning and read skills
 ├── .claude/
-│   └── commands/
-│       ├── commit.md                # /commit slash command
-│       ├── log.md                   # /log slash command
-│       └── rewind.md                # /rewind slash command
+│   ├── commands/
+│   │   ├── commit.md                # /commit slash command
+│   │   ├── log.md                   # /log slash command
+│   │   ├── rewind.md                # /rewind slash command
+│   │   ├── learn.md                 # /learn slash command
+│   │   └── skills.md                # /skills slash command
+│   └── skills/                      # Learned guardrails (grows via /learn)
+│       ├── curl-pipe-bash-self-contained.md
+│       └── ...
 └── ai-logs/
     ├── 2026-02-26-auth-refactor.md
     ├── 2026-02-24-payment-webhooks.md
@@ -82,6 +89,16 @@ Each log captures:
 - Known limitations and follow-up
 
 Logs are plain markdown. They live in your repo. They're committed with your code. Nothing leaves your machine.
+
+### The learning loop
+
+Logs answer "why did we do X." Over time, you can turn them into guardrails:
+
+- `/learn` reads unprocessed logs, finds lessons (wrong turns, shipped bugs, reversed decisions), and proposes concrete rules to save in `.claude/skills/`.
+- Claude Code reads those skills at the start of every session, so old mistakes don't repeat.
+- `/skills` lists what's in your rulebook today.
+
+Nothing is automatic. You approve every skill before it's written, every lesson before it's committed.
 
 ---
 
