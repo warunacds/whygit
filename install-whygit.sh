@@ -688,29 +688,66 @@ Logs live in `ai-logs/YYYY-MM-DD-<slug>.md` and capture:
 - After making an architectural decision
 - Any session where "why did we do it this way" might be asked later'
 
+SKILLS_BLOCK='## Skills
+
+This repo uses `.claude/skills/` to store concrete, repo-specific guardrails
+learned from past sessions. Before starting work, use a two-pass load:
+
+1. **Scan:** read each `.claude/skills/*.md` file'"'"'s frontmatter and the
+   `When to apply` / `When NOT to apply` sections only. Skip bodies.
+2. **Match:** for each skill whose `When to apply` matches the current task
+   (and none of the `When NOT to apply` cases apply), read the full file
+   and apply the guardrails.
+
+If a skill'"'"'s guidance conflicts with an explicit user instruction, follow
+the user but mention the conflict so it can be resolved with `/learn`.
+
+If you encounter a situation where a skill *should* exist but doesn'"'"'t — a
+mistake that future sessions could avoid — note it clearly in the session
+log so `/learn` can capture it later.
+
+### Skill Commands
+| Command | What it does |
+|---------|-------------|
+| `/learn` | Mine unprocessed `ai-logs/` for learnable failures, propose skill changes |
+| `/learn --log <path>` | Re-mine one specific log, ignoring the processed ledger |
+| `/skills` | List current skills and any unresolved conflicts |'
+
 if [ -f "$TARGET/CLAUDE.md" ]; then
   if grep -qF "AI Decision Logging" "$TARGET/CLAUDE.md"; then
-    echo "ℹ️  CLAUDE.md already contains whygit config — skipping append"
+    echo "ℹ️  CLAUDE.md already contains whygit AI Decision Logging block — skipping"
   else
     printf '\n---\n%s\n' "$CLAUDE_BLOCK" >> "$TARGET/CLAUDE.md"
-    echo "⚠️  Appended to existing CLAUDE.md — review for duplicates"
+    echo "⚠️  Appended AI Decision Logging block to existing CLAUDE.md — review for duplicates"
+  fi
+
+  if grep -qF "This repo uses \`.claude/skills/\`" "$TARGET/CLAUDE.md"; then
+    echo "ℹ️  CLAUDE.md already contains whygit Skills block — skipping"
+  else
+    printf '\n---\n%s\n' "$SKILLS_BLOCK" >> "$TARGET/CLAUDE.md"
+    echo "⚠️  Appended Skills block to existing CLAUDE.md — review for duplicates"
   fi
 else
-  printf '%s\n' "$CLAUDE_BLOCK" > "$TARGET/CLAUDE.md"
+  printf '%s\n\n---\n%s\n' "$CLAUDE_BLOCK" "$SKILLS_BLOCK" > "$TARGET/CLAUDE.md"
 fi
 
 echo ""
 echo "✅ Done! whygit installed:"
 echo "   $TARGET/CLAUDE.md"
 echo "   $TARGET/.claude/commands/commit.md"
-echo "   $TARGET/.claude/commands/rewind.md"
 echo "   $TARGET/.claude/commands/log.md"
+echo "   $TARGET/.claude/commands/rewind.md"
+echo "   $TARGET/.claude/commands/learn.md"
+echo "   $TARGET/.claude/commands/skills.md"
+echo "   $TARGET/.claude/skills/"
 echo "   $TARGET/ai-logs/.gitkeep"
 echo ""
-echo "📝 Next: git add . && git commit -m 'chore: add AI decision logging'"
+echo "📝 Next: git add . && git commit -m 'chore: add whygit (AI decision logs + skills)'"
 echo ""
 echo "🚀 In Claude Code, use:"
 echo "   /commit         → log + commit"
 echo "   /log            → log only"
 echo "   /rewind         → browse history"
 echo "   /rewind <topic> → search history"
+echo "   /learn          → mine logs for reusable skills"
+echo "   /skills         → list current skills and conflicts"
