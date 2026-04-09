@@ -32,6 +32,7 @@ trap 'echo "" >&2; echo "‚ùå Install failed. whygit may be partially installed ‚
 
 # Create directories
 mkdir -p -- "$TARGET/.claude/commands"
+mkdir -p -- "$TARGET/.claude/skills/.conflicts"
 mkdir -p -- "$TARGET/ai-logs"
 
 # --- FILE: .claude/commands/commit.md ---
