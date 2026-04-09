@@ -28,8 +28,8 @@ status: active
 1. Never use `$BASH_SOURCE[0]`, `${0}`, or any "find my own directory" pattern
    in a script intended for piped execution. Under `curl | bash`, `$BASH_SOURCE[0]`
    is empty so the script fails immediately on the first file operation.
-2. Embed every file the installer needs to write as a heredoc (`cat > "$TARGET/path" << 'HEREDOC' ... HEREDOC`) directly inside the installer. The script must carry its own payload — no reliance on files in a sibling directory.
-3. Use quoted `'HEREDOC'` (with single quotes) for embedded file contents so shell variables and backticks inside the content are not expanded at install time.
+2. Embed every file the installer needs to write as a heredoc (`cat > "$TARGET/path" << 'HERE_DOC' ... HERE_DOC`) directly inside the installer. The script must carry its own payload — no reliance on files in a sibling directory.
+3. Use quoted `'HERE_DOC'` (with single quotes) for embedded file contents so shell variables and backticks inside the content are not expanded at install time.
 4. Before shipping a change to a piped installer, mentally trace execution with
    `$BASH_SOURCE[0]` set to empty string and confirm every path still resolves.
 5. Register any `trap '...' ERR` **after** input validation, not before. Otherwise
