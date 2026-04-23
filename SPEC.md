@@ -305,6 +305,82 @@ Skills without `concepts:` continue to load via the existing two-pass CLAUDE.md 
 |---|---|
 | `/migrate-skills` | Scans `.claude/skills/`, proposes `concepts:` blocks for pre-v2 skills, applies on approval. Idempotent. |
 
+### Hook contract
+
+`concept_match.sh` is registered against Claude Code's `UserPromptSubmit` event. The contract it implements:
+
+**Input:** JSON on stdin, shaped:
+
+```json
+{
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "the user's prompt text"
+}
+```
+
+The hook uses `jq` to extract `.prompt` when available, falling back to a `sed`-based extraction when `jq` is not installed.
+
+**Output on match:** a single `<whygit-memory>` block on stdout:
+
+```
+<whygit-memory>
+Relevant prior decisions from this codebase's memory:
+
+### From <skill-filename>
+
+<full skill file contents>
+
+---
+
+### From <next-matching-skill>
+
+...
+
+---
+(N additional matching skills omitted — run /skills to browse)
+</whygit-memory>
+```
+
+Claude Code injects this stdout into the turn's context. The truncation line only appears when the 9,000-character budget is reached; otherwise it is omitted.
+
+**Output on no match or any error:** empty stdout.
+
+**Exit code:** always 0. The hook never blocks the user. Missing skills directory, malformed JSON, unreadable skill files, and empty stdin all exit cleanly with empty output.
+
+**Environment variables:**
+
+| Variable | Purpose |
+|---|---|
+| `CLAUDE_PROJECT_DIR` | Root of the Claude Code project. Default `$PWD`. |
+| `WHYGIT_SKIP_HOOKS` | Set to `1` to bypass matching (recursion safeguard for nested Claude invocations). |
+
+**Output budget:** 9,000 characters of cumulative skill content, leaving 1,000 characters of headroom under Claude Code's 10,000-character stdout cap. When appending the next matching skill would exceed the budget, the hook stops, records the count of omitted skills, and appends a single-line notice (`(N additional matching skills omitted — run /skills to browse)`) before the closing tag.
+
+**Matching algorithm:** case-insensitive substring match. The prompt is lowercased and whitespace-collapsed; each skill's aliases are likewise lowercased at parse time. If any alias is a substring of the normalized prompt, that skill matches. Matching is first-match-per-skill — aliases beyond the first hit are not evaluated. Skills without a `concepts:` block never match.
+
+**Dependencies:** `bash`, `awk`, `sed`, `tr` (all POSIX-standard). `jq` improves JSON parsing reliability but is not required; installer warns when `jq` is missing but does not fail.
+
+### Settings.json
+
+The installer merges this entry into `.claude/settings.json` (creating the file if missing, preserving any existing hooks/permissions if present):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/concept_match.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Idempotency is verified by string-matching `bash .claude/hooks/concept_match.sh` in the existing file — if present, the merge is skipped. If absent and `jq` is available, the installer appends the new `UserPromptSubmit` entry via `jq`. If `jq` is missing, the installer prints the JSON fragment the user should paste manually.
+
 ### Deferred to later v2 cycles
 
 - Automatic capture via Stop hook (`auto_capture.sh`)
