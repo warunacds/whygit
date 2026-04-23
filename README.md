@@ -52,6 +52,7 @@ In any Claude Code session:
 /rewind 2026-02-26   → show all logs from that date
 /learn               → mine ai-logs/ for reusable skills
 /skills              → list active skills and unresolved conflicts
+/migrate-skills      → backfill concepts: on pre-v2 skills (v2 upgrade step)
 ```
 
 That's it.
@@ -114,6 +115,16 @@ Nothing is automatic. You approve every skill before it's written, every lesson 
 | Cost | Free | TBD |
 
 **Philosophy:** entire.io captures everything automatically. whygit captures curated reasoning on demand. They're complementary — entire.io is the raw tape, whygit is the edited highlights.
+
+---
+
+## v2: concept-triggered retrieval
+
+whygit v2 adds a `UserPromptSubmit` hook that injects matching skills into Claude's context mid-session. Skills grow a `concepts:` block that maps domain phrases (e.g. `"installer"`, `"piped installer"`) to the skill file.
+
+When you type a prompt containing any alias from any skill's `concepts:` block, Claude receives the full skill as context for that turn — without you having to remember it's relevant.
+
+Existing v1 skills are unchanged; run `/migrate-skills` once to add `concepts:` to them.
 
 ---
 

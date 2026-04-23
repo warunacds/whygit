@@ -277,6 +277,42 @@ git add . && git commit -m "chore: add AI decision logging"
 
 ---
 
+## v2 Phase 1 — Concept-Triggered Retrieval
+
+v2 adds a `UserPromptSubmit` hook (`.claude/hooks/concept_match.sh`) that injects matching skills into Claude's context mid-session, and grows a `concepts:` block in skill frontmatter to drive retrieval by domain vocabulary rather than only file/symbol names.
+
+### New files
+
+- `.claude/hooks/concept_match.sh` — reads JSON from stdin, matches prompt against every skill's aliases, emits matches wrapped in a `<whygit-memory>` block on stdout (up to 9k chars, with a truncation notice if more match).
+- `.claude/commands/migrate-skills.md` — slash command that backfills `concepts:` on existing v1 skills with user approval.
+- `.claude/settings.json` — registers the hook.
+
+### Updated skill frontmatter
+
+```yaml
+concepts:
+  - name: <kebab-case-name>
+    aliases: ["<canonical>", "<alternate phrasing>"]
+    anchors:
+      - <file path>
+```
+
+Skills without `concepts:` continue to load via the existing two-pass CLAUDE.md scan. They simply don't fire via concept-triggered retrieval until migrated.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `/migrate-skills` | Scans `.claude/skills/`, proposes `concepts:` blocks for pre-v2 skills, applies on approval. Idempotent. |
+
+### Deferred to later v2 cycles
+
+- Automatic capture via Stop hook (`auto_capture.sh`)
+- Automatic mining into drafts + `/review-skills` command
+- Naming guardrail via PreToolUse hook
+
+---
+
 ## Future Ideas
 
 - `/rewind --diff <slug>` — show the git diff alongside the AI log
