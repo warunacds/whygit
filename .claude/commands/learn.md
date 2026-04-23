@@ -139,6 +139,59 @@ Learned from past shell scripting mistakes.
 
 This draft fails Check 1 (no concrete artefact), Check 2 (vague citation), Check 3 (three banned phrases), and Check 4 (any team could write this without reading the log). Dropped.
 
+## Phase 3.5 — Concept extraction
+
+For every NEW or PATCH draft that survived Phase 3, extract a `concepts:` block that will be added to the skill's frontmatter. Concepts drive v2's just-in-time retrieval: when a future user prompt contains any alias, this skill is injected into the turn's context.
+
+### Definitions
+
+- **Concept:** a domain-level noun phrase a developer on this codebase would use in conversation.
+- **Alias:** an alternate phrasing of the concept. 2–4 per concept. The canonical name is always in the alias list.
+- **Anchor:** a file path that implements or embodies the concept. 1–3 per concept.
+
+### What counts as a concept
+
+- Domain terminology the team uses in conversation.
+- Architectural patterns specific to this codebase.
+- Problem categories.
+- Feature areas.
+
+### What does NOT count
+
+- File paths.
+- Class or method names.
+- Generic programming terms (refactor, bug fix, performance).
+- Library or framework names without domain binding.
+
+Rule of thumb: a concept survives renaming its implementation. An implementation class name is not a concept — the domain phrase the team uses for that class's responsibility is.
+
+### Self-audit (before including)
+
+For each concept:
+- Would two engineers on this codebase agree on the meaning? If no, drop.
+- Is this concept already in an existing skill? If so, the draft should have been a PATCH — revisit the attribution.
+- Are aliases genuinely different phrasings, or just grammatical variants (plural vs singular, -ing vs -ed)? Reject near-duplicates.
+
+Add the extracted concepts to the draft's frontmatter under a `concepts:` key before including it in the Phase 4 proposal. The user sees and approves concepts as part of the skill — no separate gate.
+
+### Skill frontmatter shape
+
+```yaml
+---
+id: <id>
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+sources:
+  - ai-logs/<source log filename>
+status: active
+concepts:
+  - name: <concept-name>
+    aliases: ["<canonical name>", "<alternate phrasing>"]
+    anchors:
+      - <file path>
+---
+```
+
 ## Phase 4 — Propose and write
 
 Show the user a structured proposal in chat. Format:
