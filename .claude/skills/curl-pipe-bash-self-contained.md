@@ -1,11 +1,16 @@
 ---
 id: curl-pipe-bash-self-contained
 created: 2026-04-09
-updated: 2026-04-09
+updated: 2026-04-23
 sources:
   - ai-logs/2026-02-26-open-source-release.md
   - ai-logs/2026-02-26-install-script-security-fixes.md
 status: active
+concepts:
+  - name: piped-installer
+    aliases: ["piped installer", "install script", "installer", "curl pipe bash"]
+    anchors:
+      - install-whygit.sh
 ---
 
 # Install scripts piped from curl must be self-contained
