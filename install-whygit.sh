@@ -33,6 +33,7 @@ trap 'echo "" >&2; echo "❌ Install failed. whygit may be partially installed �
 # Create directories
 mkdir -p -- "$TARGET/.claude/commands"
 mkdir -p -- "$TARGET/.claude/skills/.conflicts"
+mkdir -p -- "$TARGET/.claude/hooks"
 mkdir -p -- "$TARGET/ai-logs"
 
 # --- FILE: .claude/commands/commit.md ---
@@ -574,6 +575,222 @@ Resolve conflicts by editing the affected skill and deleting the conflict file.
 Nothing mutates in this command. It is read-only.
 HEREDOC
 
+# --- FILE: .claude/commands/migrate-skills.md ---
+cat > "$TARGET/.claude/commands/migrate-skills.md" << 'HEREDOC'
+# /migrate-skills — Backfill concepts block on existing v1 skills
+
+Backfill v2 `concepts:` frontmatter on skill files that were authored before v2. Reads each skill plus its source logs, extracts domain concepts with aliases and anchors, and proposes the additions for batch approval. No nested Claude invocation — everything runs in this session.
+
+## Usage
+
+- `/migrate-skills` — scan all skills, propose migrations for those missing `concepts:`.
+
+## Step 0: Validate environment
+
+If `.claude/skills/` does not exist, tell the user:
+
+> `.claude/skills/` not found. Re-run `install-whygit.sh` to install whygit.
+
+And stop.
+
+## Phase 1 — Discover
+
+1. List every `*.md` in `.claude/skills/` (top level only; skip `.drafts/` and `.conflicts/`).
+2. Read the frontmatter of each and exclude any file that already contains a `concepts:` key.
+3. Stop with "No skills to migrate — Phase 1 ready" if the candidate list is empty.
+
+## Phase 2 — Extract
+
+For each candidate skill:
+
+1. Read the full skill file.
+2. For each log in the skill's `sources:` list, read the log file. If a log is missing, note it.
+3. Extract concepts using these rules:
+
+### What counts as a concept
+
+- Domain terminology the team uses in conversation.
+- Architectural patterns specific to this codebase.
+- Problem categories.
+- Feature areas.
+
+### What does NOT count
+
+- File paths.
+- Class or method names.
+- Generic programming terms (refactor, bug fix, performance).
+- Library or framework names without domain binding.
+
+Rule of thumb: a concept survives renaming its implementation.
+
+For each concept, produce:
+- `name`: kebab-case identifier
+- `aliases`: 2–4 alternate phrasings a developer or LLM might use. Always include the canonical name.
+- `anchors`: 1–3 file paths that implement the concept
+
+### Self-audit
+
+For each concept:
+- Would two engineers on this codebase agree on the meaning?
+- Are aliases genuinely different phrasings, or just grammatical variants? Reject duplicates.
+- Is the concept already covered by another skill in this migration batch? If so, note the overlap to the user but still propose — the hook dedupes by skill file, not by concept.
+
+## Phase 3 — Propose
+
+Print a batch proposal in chat. For each candidate:
+
+```
+MIGRATE .claude/skills/<id>.md
+  Sources: ai-logs/<file1>[, ai-logs/<file2>]
+  Proposed concepts:
+    - name: <name>
+      aliases: ["<alias1>", "<alias2>"]
+      anchors:
+        - <anchor>
+  Rationale: <one-line grounding in the source log>
+```
+
+If any candidate has missing source logs, surface them explicitly:
+
+```
+  ⚠️  Missing logs: ai-logs/<missing.md>. Extraction used skill content only.
+```
+
+Then ask:
+
+> Apply these migrations? **[y / N / select]**
+
+- `y` — apply everything below.
+- `N` — abort. Tell the user "discarded, nothing written."
+- `select` — ask which items (by number) to apply. Apply only those.
+
+## Phase 4 — Apply
+
+For each approved migration, edit the skill file with the `Edit` tool:
+
+1. Locate the frontmatter closing delimiter (the second `---`).
+2. Insert the `concepts:` block immediately before it.
+3. Update the `updated:` line to today's date.
+4. Preserve the order and content of all other frontmatter keys.
+
+Do **not** rewrite the whole file — targeted edits only. This avoids accidental body corruption.
+
+## Phase 5 — Commit
+
+Stage `.claude/skills/` and commit:
+
+```
+learn: backfill concepts on <N> existing skills
+
+Migrated:
+- .claude/skills/<id1>.md
+- .claude/skills/<id2>.md
+```
+
+Report to the user:
+- Commit hash
+- List of migrated files
+- Any candidates that were skipped and why (missing sources, user declined)
+
+## Failure modes
+
+- If the `Edit` fails because the expected frontmatter closing delimiter isn't unique in the file, fall back to reading + rewriting that one skill, with a warning printed to the user.
+- If all migrations fail, roll back via `git restore .claude/skills/` and tell the user.
+HEREDOC
+
+# --- FILE: .claude/hooks/concept_match.sh ---
+cat > "$TARGET/.claude/hooks/concept_match.sh" << 'HEREDOC'
+#!/usr/bin/env bash
+# whygit v2 concept-match hook for UserPromptSubmit.
+# Reads JSON on stdin, emits matching skills wrapped in <whygit-memory> on stdout.
+# Must never exit non-zero; hook failures must never block the user.
+
+set -u
+
+if [[ "${WHYGIT_SKIP_HOOKS:-0}" == "1" ]]; then
+  exit 0
+fi
+
+SKILLS_DIR="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/skills"
+[[ -d "$SKILLS_DIR" ]] || exit 0
+
+MAX_BYTES=9000
+
+STDIN="$(cat 2>/dev/null || true)"
+[[ -z "$STDIN" ]] && exit 0
+
+if command -v jq >/dev/null 2>&1; then
+  PROMPT="$(printf '%s' "$STDIN" | jq -r '.prompt // empty' 2>/dev/null || true)"
+else
+  PROMPT="$(printf '%s' "$STDIN" | sed -n 's/.*"prompt"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p' | head -1)"
+fi
+[[ -z "$PROMPT" ]] && exit 0
+
+PROMPT_NORM="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ')"
+
+buffer=""
+emitted=0
+omitted=0
+
+shopt -s nullglob
+for skill in "$SKILLS_DIR"/*.md; do
+  [[ -f "$skill" ]] || continue
+
+  aliases="$(awk '
+    BEGIN { fm = 0; in_concepts = 0 }
+    /^---[[:space:]]*$/ { fm = !fm; next }
+    !fm { next }
+    /^concepts:/ { in_concepts = 1; next }
+    in_concepts && /^[[:space:]]+aliases:/ {
+      line = $0
+      while (match(line, /"[^"]+"/)) {
+        print tolower(substr(line, RSTART+1, RLENGTH-2))
+        line = substr(line, RSTART+RLENGTH)
+      }
+      next
+    }
+    in_concepts && /^[a-zA-Z_]+:/ { in_concepts = 0 }
+  ' "$skill" 2>/dev/null)" || aliases=""
+
+  [[ -z "$aliases" ]] && continue
+
+  matched=0
+  while IFS= read -r alias; do
+    [[ -z "$alias" ]] && continue
+    if [[ "$PROMPT_NORM" == *"$alias"* ]]; then
+      matched=1
+      break
+    fi
+  done <<< "$aliases"
+  (( matched == 0 )) && continue
+
+  content="$(cat "$skill" 2>/dev/null || true)"
+  section="### From $(basename "$skill")"$'\n\n'"$content"$'\n\n---\n\n'
+
+  wrapper_size=120
+  candidate_size=$(( ${#buffer} + ${#section} + wrapper_size ))
+  if (( candidate_size > MAX_BYTES )); then
+    omitted=$((omitted + 1))
+    continue
+  fi
+  buffer="${buffer}${section}"
+  emitted=$((emitted + 1))
+done
+
+if (( emitted > 0 )); then
+  printf '<whygit-memory>\n'
+  printf "Relevant prior decisions from this codebase's memory:\n\n"
+  printf '%s' "$buffer"
+  if (( omitted > 0 )); then
+    printf '(%d additional matching skills omitted — run /skills to browse)\n' "$omitted"
+  fi
+  printf '</whygit-memory>\n'
+fi
+
+exit 0
+HEREDOC
+chmod +x "$TARGET/.claude/hooks/concept_match.sh"
+
 # --- FILE: .claude/skills/.processed (empty ledger) ---
 touch "$TARGET/.claude/skills/.processed"
 
@@ -588,11 +805,16 @@ cat > "$TARGET/.claude/skills/curl-pipe-bash-self-contained.md" << 'HEREDOC'
 ---
 id: curl-pipe-bash-self-contained
 created: 2026-04-09
-updated: 2026-04-09
+updated: 2026-04-23
 sources:
   - ai-logs/2026-02-26-open-source-release.md
   - ai-logs/2026-02-26-install-script-security-fixes.md
 status: active
+concepts:
+  - name: piped-installer
+    aliases: ["piped installer", "install script", "installer", "curl pipe bash"]
+    anchors:
+      - install-whygit.sh
 ---
 
 # Install scripts piped from curl must be self-contained
@@ -651,6 +873,47 @@ fi
 
 # --- FILE: ai-logs/.gitkeep ---
 touch "$TARGET/ai-logs/.gitkeep"
+
+# --- FILE: .claude/settings.json (merge idempotently) ---
+HOOK_CMD='bash .claude/hooks/concept_match.sh'
+SETTINGS="$TARGET/.claude/settings.json"
+
+if [ -f "$SETTINGS" ]; then
+  if grep -qF "$HOOK_CMD" "$SETTINGS"; then
+    echo "ℹ️  .claude/settings.json already registers concept_match.sh — skipping"
+  else
+    if command -v jq >/dev/null 2>&1; then
+      tmp="$(mktemp)"
+      jq --arg cmd "$HOOK_CMD" '
+        .hooks //= {} |
+        .hooks.UserPromptSubmit //= [] |
+        .hooks.UserPromptSubmit += [
+          { "matcher": "*", "hooks": [ { "type": "command", "command": $cmd } ] }
+        ]
+      ' "$SETTINGS" > "$tmp" && mv -- "$tmp" "$SETTINGS"
+      echo "✨ Merged UserPromptSubmit hook into .claude/settings.json"
+    else
+      echo "⚠️  jq not installed — add this to .claude/settings.json manually:"
+      echo '    "hooks": { "UserPromptSubmit": [ { "matcher": "*", "hooks": [ { "type": "command", "command": "bash .claude/hooks/concept_match.sh" } ] } ] }'
+    fi
+  fi
+else
+  cat > "$SETTINGS" << 'SETTINGS_EOF'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/concept_match.sh" }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+  echo "✨ Created .claude/settings.json with concept_match hook"
+fi
 
 # --- FILE: CLAUDE.md (idempotent: append only if block not already present) ---
 CLAUDE_BLOCK='# Claude Code Instructions
@@ -711,7 +974,8 @@ log so `/learn` can capture it later.
 |---------|-------------|
 | `/learn` | Mine unprocessed `ai-logs/` for learnable failures, propose skill changes |
 | `/learn --log <path>` | Re-mine one specific log, ignoring the processed ledger |
-| `/skills` | List current skills and any unresolved conflicts |'
+| `/skills` | List current skills and any unresolved conflicts |
+| `/migrate-skills` | Backfill v2 `concepts:` block on pre-v2 skills (one-shot) |'
 
 if [ -f "$TARGET/CLAUDE.md" ]; then
   if grep -qF "AI Decision Logging" "$TARGET/CLAUDE.md"; then
@@ -739,6 +1003,9 @@ echo "   $TARGET/.claude/commands/log.md"
 echo "   $TARGET/.claude/commands/rewind.md"
 echo "   $TARGET/.claude/commands/learn.md"
 echo "   $TARGET/.claude/commands/skills.md"
+echo "   $TARGET/.claude/commands/migrate-skills.md"
+echo "   $TARGET/.claude/hooks/concept_match.sh"
+echo "   $TARGET/.claude/settings.json"
 echo "   $TARGET/.claude/skills/"
 echo "   $TARGET/ai-logs/.gitkeep"
 echo ""
@@ -751,3 +1018,4 @@ echo "   /rewind         → browse history"
 echo "   /rewind <topic> → search history"
 echo "   /learn          → mine logs for reusable skills"
 echo "   /skills         → list current skills and conflicts"
+echo "   /migrate-skills → backfill concepts on pre-v2 skills"

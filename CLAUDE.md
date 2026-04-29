@@ -59,3 +59,4 @@ log so `/learn` can capture it later.
 | `/learn` | Mine unprocessed `ai-logs/` for learnable failures, propose skill changes |
 | `/learn --log <path>` | Re-mine one specific log, ignoring the processed ledger |
 | `/skills` | List current skills and any unresolved conflicts |
+| `/migrate-skills` | Backfill v2 `concepts:` block on pre-v2 skills (one-shot) |
